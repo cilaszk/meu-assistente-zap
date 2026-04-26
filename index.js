@@ -4,65 +4,48 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const app = express();
 const port = process.env.PORT || 3000; 
 
+// 🚨 MUDE AQUI: Coloque o número do WhatsApp do seu robô entre as aspas!
+// Formato: DDI (55 para Brasil) + DDD + Número. Tudo junto, sem espaços.
+// Exemplo: '5511988887777'
 const numeroDoRobo = '50932074530'; 
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'sessao-blindada' }),
+    authStrategy: new LocalAuth(),
     puppeteer: {
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--single-process', // Ajuda o Render a não travar a página
-            '--disable-extensions' // Evita detecções desnecessárias
-        ],
-        timeout: 60000 
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
     }
 });
 
-let codigoJaFoiPedido = false;
-
-client.on('qr', async () => {
-    if (codigoJaFoiPedido) return; 
-    codigoJaFoiPedido = true;
-
-    console.log('\n✅ WhatsApp Web carregou a tela inicial!');
-    console.log('⏳ Segurando a ansiedade por 15 segundos para evitar que o WhatsApp recarregue a página...');
-    
-    setTimeout(async () => {
-        try {
-            console.log('\n⚙️ Pedindo o código de emparelhamento...');
-            const codigo = await client.requestPairingCode(numeroDoRobo);
-            console.log('\n=============================================');
-            console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${codigo}`);
-            console.log('=============================================\n');
-            console.log('👉 VAI LÁ! Digite esse código no seu celular!');
-        } catch (error) {
-            console.error('\n❌ O WhatsApp tentou bloquear a geração:', error.message);
-            console.log('Se o servidor não caiu, tente reiniciar no Render (Manual Deploy).');
-        }
-    }, 15000); 
+client.on('qr', async (qr) => {
+    console.log('\n--- GERANDO CÓDIGO DE EMPARELHAMENTO ---');
+    try {
+        const codigo = await client.requestPairingCode(numeroDoRobo);
+        console.log('\n=============================================');
+        console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${codigo}`);
+        console.log('=============================================\n');
+        console.log('1. Abra o WhatsApp no celular do robô');
+        console.log('2. Vá em Aparelhos Conectados > Conectar um aparelho');
+        console.log('3. Toque em "Conectar com número de telefone em vez disso" (na parte de baixo da tela)');
+        console.log('4. Digite o código acima!');
+    } catch (error) {
+        console.error('Erro ao gerar o código:', error);
+    }
 });
 
 client.on('ready', () => {
-    console.log('\n🎉 SUCESSO! Robô conectado por código!');
+    console.log('\n🎉 Seu assistente está conectado e pronto para uso!');
 });
 
 client.on('message', message => {
     if(message.body.toLowerCase() === 'oi') {
-        message.reply('Olá! Sobrevivi aos bloqueios e estou online! Como posso ajudar?');
+        message.reply('Olá! Estou rodando perfeitamente! Conectado via código de emparelhamento. Como posso ajudar?');
     }
 });
 
-// O ".catch" impede que o erro "Execution context was destroyed" desligue o seu servidor!
-client.initialize().catch(err => {
-    console.error('Erro interno do navegador invisível:', err);
-});
+client.initialize();
 
 app.get('/', (req, res) => {
-  res.send('Servidor blindado rodando!');
+  res.send('O robô está online e funcionando!');
 });
 
 app.listen(port, () => {
