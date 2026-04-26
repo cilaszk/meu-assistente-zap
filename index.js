@@ -1,51 +1,62 @@
-const { default: makeWASocket, useMultiFileAuthState, delay, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, delay, fetchLatestBaileysVersion, disconnectReason } = require("@whiskeysockets/baileys");
 const pino = require("pino");
 const express = require("express");
 
 const app = express();
 const port = process.env.PORT || 10000;
 
+// Variável para impedir o flood de códigos
+let jaSolicitouCodigo = false;
+
 async function iniciarBot() {
-    // Cria a pasta de sessão automaticamente para não perder a conexão
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_permanente');
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_final');
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
         version,
         auth: state,
-        logger: pino({ level: "silent" }),
+        logger: pino({ level: "error" }), // Deixa o log limpo
         printQRInTerminal: false,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
     });
 
-    // Seu número de telefone
     const phoneNumber = "50932074530";
 
-    // Só pede o código se ainda não estiver conectado
-    if (!sock.authState.creds.registered) {
-        console.log(`\nSincronizando com o número: ${phoneNumber}`);
+    // Solicita o código apenas SE não estiver conectado e SE ainda não pediu nesta rodada
+    if (!sock.authState.creds.registered && !jaSolicitouCodigo) {
+        jaSolicitouCodigo = true;
+        console.log(`\n[SISTEMA] Iniciando pedido de código para: ${phoneNumber}`);
         
-        // Aguarda o servidor respirar antes de gerar o código
         setTimeout(async () => {
             try {
                 const code = await sock.requestPairingCode(phoneNumber);
                 console.log('\n=============================================');
                 console.log(`🚀 SEU CÓDIGO É: ${code}`);
                 console.log('=============================================\n');
+                console.log('👉 Digite este código AGORA no seu celular.');
             } catch (err) {
-                console.log("Aguardando sistema liberar o código...");
+                console.log("[ERRO] WhatsApp recusou o pedido. Reiniciando em 30s...");
+                jaSolicitouCodigo = false;
             }
-        }, 10000);
+        }, 15000); // Espera 15 segundos para o servidor estabilizar
     }
 
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", (update) => {
-        const { connection } = update;
+        const { connection, lastDisconnect } = update;
+        
         if (connection === "open") {
-            console.log("\n🎉 CONECTADO COM SUCESSO!");
-        } else if (connection === "close") {
-            iniciarBot(); // Reinicia se cair
+            console.log("\n✅ CONECTADO! O robô está ativo.");
+            jaSolicitouCodigo = false;
+        } 
+        
+        if (connection === "close") {
+            const deveriaReiniciar = lastDisconnect?.error?.output?.statusCode !== disconnectReason.loggedOut;
+            if (deveriaReiniciar) {
+                console.log("[AVISO] Conexão caiu, tentando reconectar...");
+                iniciarBot();
+            }
         }
     });
 
@@ -54,7 +65,7 @@ async function iniciarBot() {
         if (!msg.key.fromMe && msg.message) {
             const texto = msg.message.conversation || msg.message.extendedTextMessage?.text;
             if (texto?.toLowerCase() === "oi") {
-                await sock.sendMessage(msg.key.remoteJid, { text: "Opa! Estou funcionando perfeitamente agora!" });
+                await sock.sendMessage(msg.key.remoteJid, { text: "Estou funcionando!" });
             }
         }
     });
@@ -62,5 +73,5 @@ async function iniciarBot() {
 
 iniciarBot();
 
-app.get('/', (req, res) => res.send('Bot Ativo!'));
-app.listen(port, () => console.log(`Monitor porta ${port}`));
+app.get('/', (req, res) => res.send('Robô Ativo e Estável!'));
+app.listen(port, () => console.log(`Monitorando porta ${port}`));
