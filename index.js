@@ -2,18 +2,21 @@ const { default: makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion 
 const { Boom } = require("@hapi/boom");
 const pino = require("pino");
 const express = require("express");
+const fs = require("fs");
 
 const app = express();
 const port = process.env.PORT || 10000;
 
-// Variáveis de controle
 let sock;
 let botIniciado = false;
 
-// Delay (anti-spam básico)
+// 🔹 SEU NÚMERO JÁ DEFINIDO
+const PHONE_NUMBER = "50932074520";
+const MENU_LINK = "site disponivel em nosso perfil";
+
+// ===== UTIL =====
 const delay = (ms) => new Promise(res => setTimeout(res, ms));
 
-// Função para pegar texto de qualquer tipo de mensagem
 const getTexto = (msg) => {
     return msg.message?.conversation ||
            msg.message?.extendedTextMessage?.text ||
@@ -21,6 +24,30 @@ const getTexto = (msg) => {
            "";
 };
 
+// ===== BANCO SIMPLES =====
+const DB_FILE = "./data/clientes.json";
+
+function carregarDB() {
+    if (!fs.existsSync(DB_FILE)) return {};
+    return JSON.parse(fs.readFileSync(DB_FILE));
+}
+
+function salvarDB(db) {
+    fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2));
+}
+
+function getUser(numero) {
+    const db = carregarDB();
+    return db[numero];
+}
+
+function setUser(numero, data) {
+    const db = carregarDB();
+    db[numero] = { ...(db[numero] || {}), ...data };
+    salvarDB(db);
+}
+
+// ===== BOT =====
 async function iniciarBot() {
     if (botIniciado) return;
     botIniciado = true;
@@ -32,50 +59,44 @@ async function iniciarBot() {
         version,
         auth: state,
         logger: pino({ level: "silent" }),
-        printQRInTerminal: false,
         browser: ["Chrome (Linux)", "Chrome", "120.0.0"],
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 0,
+        connectTimeoutMs: 60000
     });
 
-    const phoneNumber = process.env.PHONE_NUMBER;
-
-    // 🔐 Gerar código de pareamento
+    // 🔐 GERA CÓDIGO AUTOMATICAMENTE
     if (!sock.authState.creds.registered) {
-        console.log("🔐 Gerando código de pareamento...");
+        console.log("🔐 Gerando código para:", PHONE_NUMBER);
 
         setTimeout(async () => {
             try {
-                const code = await sock.requestPairingCode(phoneNumber);
+                const code = await sock.requestPairingCode(PHONE_NUMBER);
+
                 console.log("\n==============================");
-                console.log("👉 SEU CÓDIGO:", code);
+                console.log("👉 CÓDIGO DO WHATSAPP:");
+                console.log(code);
                 console.log("==============================\n");
+
+                console.log("📱 Vá no WhatsApp > Dispositivos conectados > Inserir código");
+
             } catch (err) {
                 console.log("⏳ Aguardando liberação do WhatsApp...");
             }
         }, 8000);
     }
 
-    // Salvar sessão
     sock.ev.on("creds.update", saveCreds);
 
-    // 🔌 Conexão
+    // 🔌 CONEXÃO
     sock.ev.on("connection.update", (update) => {
         const { connection, lastDisconnect } = update;
 
-        if (connection === "connecting") {
-            console.log("⏳ Conectando...");
-        }
-
         if (connection === "open") {
-            console.log("✅ Bot conectado com sucesso!");
+            console.log("✅ BOT CONECTADO!");
         }
 
         if (connection === "close") {
             const shouldReconnect =
                 (lastDisconnect?.error instanceof Boom)?.output?.statusCode !== 401;
-
-            console.log("❌ Conexão fechada.");
 
             botIniciado = false;
 
@@ -83,47 +104,56 @@ async function iniciarBot() {
                 console.log("🔁 Reconectando...");
                 iniciarBot();
             } else {
-                console.log("🚫 Sessão inválida. Gere um novo código.");
+                console.log("❌ Sessão inválida. Gere novo código.");
             }
         }
     });
 
-    // 💬 Mensagens
+    // 💬 MENSAGENS
     sock.ev.on("messages.upsert", async ({ messages }) => {
         try {
             const msg = messages[0];
-
             if (!msg.message || msg.key.fromMe) return;
 
-            const texto = getTexto(msg).toLowerCase();
             const numero = msg.key.remoteJid;
+            const texto = getTexto(msg).toLowerCase();
 
-            console.log(`📩 Mensagem de ${numero}: ${texto}`);
+            let user = getUser(numero);
 
-            // 🔹 Respostas básicas (você pode expandir)
-            if (texto === "oi" || texto === "ola") {
-                await delay(1000);
-                await sock.sendMessage(numero, {
-                    text: "👋 Olá! Estou online.\nDigite *menu* para ver as opções."
-                });
+            if (!user) {
+                setUser(numero, { etapa: "inicio" });
+                user = { etapa: "inicio" };
             }
 
-            else if (texto === "menu") {
-                await delay(1000);
-                await sock.sendMessage(numero, {
-                    text: "📋 Aqui está o cardápio:\n👉 site disponivel em nosso perfil"
-                });
+            console.log(`📩 ${numero}: ${texto}`);
+
+            switch (user.etapa) {
+                case "inicio":
+                    await delay(1000);
+                    await sock.sendMessage(numero, {
+                        text: "👋 Olá! Digite *menu* para ver opções."
+                    });
+                    setUser(numero, { etapa: "menu" });
+                    break;
+
+                case "menu":
+                    if (texto.includes("menu")) {
+                        await delay(1000);
+                        await sock.sendMessage(numero, {
+                            text: `📋 Acesse:\n👉 ${MENU_LINK}`
+                        });
+                    }
+                    break;
             }
 
         } catch (err) {
-            console.log("Erro ao processar mensagem:", err);
+            console.log("Erro:", err);
         }
     });
 }
 
-// 🌐 Servidor (Render precisa disso)
+// ===== SERVER =====
 app.get('/', (req, res) => res.send('🤖 Bot Online'));
-app.listen(port, () => console.log(`🌐 Servidor rodando na porta ${port}`));
+app.listen(port, () => console.log("🌐 Servidor ativo"));
 
-// 🚀 Iniciar bot
 iniciarBot();
