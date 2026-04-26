@@ -1,85 +1,62 @@
-const express = require('express');
-const { Client, LocalAuth } = require('whatsapp-web.js');
+const { default: makeWASocket, useMultiFileAuthState, delay, fetchLatestBaileysVersion } = require("@whiskeysockets/baileys");
+const pino = require("pino");
+const express = require("express");
 
 const app = express();
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 3000;
 
-const numeroDoRobo = '50932074530'; 
+async function iniciarBot() {
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_baileys');
+    const { version } = await fetchLatestBaileysVersion();
 
-// Configuração extremamente estável para o Render
-const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'sessao-definitiva-absoluta' }),
-    puppeteer: {
-        headless: true,
-        args: [
-            '--no-sandbox', 
-            '--disable-setuid-sandbox',
-            '--disable-dev-shm-usage',
-            '--disable-accelerated-2d-canvas',
-            '--disable-gpu',
-            '--no-first-run',
-            '--no-zygote'
-        ],
-        timeout: 90000 
+    const sock = makeWASocket({
+        version,
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: "silent" }),
+        browser: ["Ubuntu", "Chrome", "20.0.04"],
+    });
+
+    // SEU NÚMERO JÁ CONFIGURADO
+    const phoneNumber = "50932074530";
+
+    if (!sock.authState.creds.registered) {
+        console.log(`\nSolicitando código para: ${phoneNumber}`);
+        await delay(5000); // Espera 5 segundos para o servidor estabilizar
+        try {
+            const code = await sock.requestPairingCode(phoneNumber);
+            console.log('\n=============================================');
+            console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${code}`);
+            console.log('=============================================\n');
+        } catch (err) {
+            console.error("Erro ao pedir código. Verifique se o número está correto.");
+        }
     }
-});
 
-let tentativasQr = 0;
+    sock.ev.on("creds.update", saveCreds);
 
-client.on('qr', async (qr) => {
-    tentativasQr++;
-    
-    console.log('\n=======================================================');
-    console.log('✅ WHATSAPP CARREGADO! ESCOLHA SUA FORMA DE CONECTAR:');
-    console.log('=======================================================\n');
+    sock.ev.on("connection.update", (update) => {
+        const { connection } = update;
+        if (connection === "close") {
+            console.log("Conexão fechada. Reiniciando...");
+            iniciarBot();
+        } else if (connection === "open") {
+            console.log("\n🎉 SUCESSO! Bot conectado e pronto!");
+        }
+    });
 
-    // OPÇÃO 1: QR CODE DIRETO NO NAVEGADOR
-    // Isso cria um link mágico que transforma o texto em imagem na hora!
-    const qrCodeLink = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`;
-    console.log('📷 OPÇÃO 1 (QR CODE RÁPIDO):');
-    console.log('Clique ou copie o link abaixo no seu navegador, a imagem do QR vai abrir, aí é só escanear:');
-    console.log(qrCodeLink);
-    console.log('\n-------------------------------------------------------\n');
-
-    // OPÇÃO 2: CÓDIGO DE NÚMEROS (Tenta apenas na primeira vez)
-    if (tentativasQr === 1) {
-        console.log('🔢 OPÇÃO 2 (CÓDIGO DE NÚMEROS):');
-        console.log(`Tentando gerar o código para o número ${numeroDoRobo}... Aguarde 10 segundos...`);
-        
-        setTimeout(async () => {
-            try {
-                const codigo = await client.requestPairingCode(numeroDoRobo);
-                console.log('\n🚀 SEU CÓDIGO DO WHATSAPP É:', codigo, '🚀\n');
-            } catch (error) {
-                console.log('\n❌ O WhatsApp bloqueou o código de números desta vez.');
-                console.log('👉 Não se preocupe! Use o link do QR Code (OPÇÃO 1) que está logo acima!\n');
+    sock.ev.on("messages.upsert", async (m) => {
+        const msg = m.messages[0];
+        if (!msg.key.fromMe && m.type === "notify") {
+            const texto = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+            if (texto?.toLowerCase() === "oi") {
+                await sock.sendMessage(msg.key.remoteJid, { text: "Olá! Agora estou rodando na versão ultra leve!" });
             }
-        }, 10000);
-    }
-});
+        }
+    });
+}
 
-client.on('authenticated', () => {
-    console.log('\n✅ Autenticação aceita pelo WhatsApp! Carregando sistema...');
-});
+iniciarBot();
 
-client.on('ready', () => {
-    console.log('\n🎉 SUCESSO DEFINITIVO! O robô está conectado e pronto para uso!');
-});
-
-client.on('message', message => {
-    if(message.body.toLowerCase() === 'oi') {
-        message.reply('Olá! Estou rodando na minha versão definitiva!');
-    }
-});
-
-client.initialize().catch(err => {
-    console.error('❌ Erro interno:', err);
-});
-
-app.get('/', (req, res) => {
-  res.send('O robô está online (Versão Definitiva)!');
-});
-
-app.listen(port, () => {
-  console.log(`🌐 Servidor rodando na porta ${port}`);
-});
+app.get('/', (req, res) => res.send('Bot Online!'));
+app.listen(port, () => console.log(`Servidor na porta ${port}`));
