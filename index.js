@@ -4,32 +4,40 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const app = express();
 const port = process.env.PORT || 3000; 
 
-// 🚨 MUDE AQUI: Coloque o número do WhatsApp do seu robô entre as aspas!
-// Formato: DDI (55 para Brasil) + DDD + Número. Tudo junto, sem espaços.
-// Exemplo: '5511988887777'
+// 🚨 MUDE AQUI: Coloque o número do WhatsApp do seu robô (Sem o +)
 const numeroDoRobo = '50932074530'; 
 
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: [
+            '--no-sandbox', 
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--disable-gpu'
+        ]
     }
 });
 
 client.on('qr', async (qr) => {
-    console.log('\n--- GERANDO CÓDIGO DE EMPARELHAMENTO ---');
-    try {
-        const codigo = await client.requestPairingCode(numeroDoRobo);
-        console.log('\n=============================================');
-        console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${codigo}`);
-        console.log('=============================================\n');
-        console.log('1. Abra o WhatsApp no celular do robô');
-        console.log('2. Vá em Aparelhos Conectados > Conectar um aparelho');
-        console.log('3. Toque em "Conectar com número de telefone em vez disso" (na parte de baixo da tela)');
-        console.log('4. Digite o código acima!');
-    } catch (error) {
-        console.error('Erro ao gerar o código:', error);
-    }
+    console.log('\n--- WHATSAPP CARREGANDO... AGUARDE 5 SEGUNDOS ---');
+    
+    // O segredo para não dar o bug: Esperar 5 segundos antes de pedir o código
+    setTimeout(async () => {
+        try {
+            const codigo = await client.requestPairingCode(numeroDoRobo);
+            console.log('\n=============================================');
+            console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${codigo}`);
+            console.log('=============================================\n');
+            console.log('Agora sim! Digite esse código naquela opção que você achou no celular.');
+        } catch (error) {
+            console.error('\nErro ao gerar o código:', error);
+            console.log('Se der erro, verifique se o número foi digitado corretamente na linha 8!');
+        }
+    }, 5000); 
 });
 
 client.on('ready', () => {
@@ -38,14 +46,14 @@ client.on('ready', () => {
 
 client.on('message', message => {
     if(message.body.toLowerCase() === 'oi') {
-        message.reply('Olá! Estou rodando perfeitamente! Conectado via código de emparelhamento. Como posso ajudar?');
+        message.reply('Olá! Estou rodando perfeitamente! Como posso ajudar?');
     }
 });
 
 client.initialize();
 
 app.get('/', (req, res) => {
-  res.send('O robô está online e funcionando!');
+  res.send('O robô está online!');
 });
 
 app.listen(port, () => {
