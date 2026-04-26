@@ -1,7 +1,7 @@
 {
-  "name": "bot-whatsapp",
+  "name": "meu-assistente-zap",
   "version": "1.0.0",
-  "description": "",
+  "description": "Bot de WhatsApp Versão Estável",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
@@ -9,7 +9,7 @@
   "dependencies": {
     "express": "^4.18.2",
     "@whiskeysockets/baileys": "^6.5.0",
-    "qrcode-terminal": "^0.12.0",
-    "pino": "^8.14.1"
+    "pino": "^8.14.1",
+    "qrcode-terminal": "^0.12.0"
   }
 }
