@@ -12,10 +12,10 @@ const client = new Client({
     }
 });
 
-// Agora ele gera o QR Code no terminal!
+// Agora ele gera o QR Code no terminal gigante!
 client.on('qr', (qr) => {
     console.log('\n\n=== ESCANEIE O QR CODE ABAIXO ===\n\n');
-    qrcode.generate(qr, {small: true});
+    qrcode.generate(qr);
 });
 
 client.on('ready', () => {
