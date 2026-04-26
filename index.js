@@ -3,54 +3,58 @@ const pino = require("pino");
 const express = require("express");
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 10000;
 
 async function iniciarBot() {
-    const { state, saveCreds } = await useMultiFileAuthState('sessao_baileys');
+    // Cria a pasta de sessão automaticamente para não perder a conexão
+    const { state, saveCreds } = await useMultiFileAuthState('sessao_permanente');
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({
         version,
         auth: state,
-        printQRInTerminal: false,
         logger: pino({ level: "silent" }),
+        printQRInTerminal: false,
         browser: ["Ubuntu", "Chrome", "20.0.04"],
     });
 
-    // SEU NÚMERO JÁ CONFIGURADO
+    // Seu número de telefone
     const phoneNumber = "50932074530";
 
+    // Só pede o código se ainda não estiver conectado
     if (!sock.authState.creds.registered) {
-        console.log(`\nSolicitando código para: ${phoneNumber}`);
-        await delay(5000); // Espera 5 segundos para o servidor estabilizar
-        try {
-            const code = await sock.requestPairingCode(phoneNumber);
-            console.log('\n=============================================');
-            console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${code}`);
-            console.log('=============================================\n');
-        } catch (err) {
-            console.error("Erro ao pedir código. Verifique se o número está correto.");
-        }
+        console.log(`\nSincronizando com o número: ${phoneNumber}`);
+        
+        // Aguarda o servidor respirar antes de gerar o código
+        setTimeout(async () => {
+            try {
+                const code = await sock.requestPairingCode(phoneNumber);
+                console.log('\n=============================================');
+                console.log(`🚀 SEU CÓDIGO É: ${code}`);
+                console.log('=============================================\n');
+            } catch (err) {
+                console.log("Aguardando sistema liberar o código...");
+            }
+        }, 10000);
     }
 
     sock.ev.on("creds.update", saveCreds);
 
     sock.ev.on("connection.update", (update) => {
         const { connection } = update;
-        if (connection === "close") {
-            console.log("Conexão fechada. Reiniciando...");
-            iniciarBot();
-        } else if (connection === "open") {
-            console.log("\n🎉 SUCESSO! Bot conectado e pronto!");
+        if (connection === "open") {
+            console.log("\n🎉 CONECTADO COM SUCESSO!");
+        } else if (connection === "close") {
+            iniciarBot(); // Reinicia se cair
         }
     });
 
     sock.ev.on("messages.upsert", async (m) => {
         const msg = m.messages[0];
-        if (!msg.key.fromMe && m.type === "notify") {
-            const texto = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
+        if (!msg.key.fromMe && msg.message) {
+            const texto = msg.message.conversation || msg.message.extendedTextMessage?.text;
             if (texto?.toLowerCase() === "oi") {
-                await sock.sendMessage(msg.key.remoteJid, { text: "Olá! Agora estou rodando na versão ultra leve!" });
+                await sock.sendMessage(msg.key.remoteJid, { text: "Opa! Estou funcionando perfeitamente agora!" });
             }
         }
     });
@@ -58,5 +62,5 @@ async function iniciarBot() {
 
 iniciarBot();
 
-app.get('/', (req, res) => res.send('Bot Online!'));
-app.listen(port, () => console.log(`Servidor na porta ${port}`));
+app.get('/', (req, res) => res.send('Bot Ativo!'));
+app.listen(port, () => console.log(`Monitor porta ${port}`));
