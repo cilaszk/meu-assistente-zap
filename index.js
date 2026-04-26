@@ -4,11 +4,12 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const app = express();
 const port = process.env.PORT || 3000; 
 
-// 🚨 MUDE AQUI: Coloque o número do WhatsApp do seu robô (Sem o +)
+// 🚨 MUDE AQUI: Coloque o número do WhatsApp do seu robô
 const numeroDoRobo = '50932074530'; 
 
 const client = new Client({
-    authStrategy: new LocalAuth(),
+    // O pulo do gato: dar um nome novo para a sessão ignora qualquer erro antigo!
+    authStrategy: new LocalAuth({ clientId: 'sessao-zerada-1' }),
     puppeteer: {
         args: [
             '--no-sandbox', 
@@ -23,9 +24,10 @@ const client = new Client({
 });
 
 client.on('qr', async (qr) => {
-    console.log('\n--- WHATSAPP CARREGANDO... AGUARDE 5 SEGUNDOS ---');
+    console.log('\n--- WHATSAPP CARREGANDO... AGUARDE 15 SEGUNDOS ---');
+    console.log('Limpando rastros antigos e preparando a tela...');
     
-    // O segredo para não dar o bug: Esperar 5 segundos antes de pedir o código
+    // Aumentamos o freio para 15 segundos para garantir 100% de carregamento
     setTimeout(async () => {
         try {
             const codigo = await client.requestPairingCode(numeroDoRobo);
@@ -35,9 +37,9 @@ client.on('qr', async (qr) => {
             console.log('Agora sim! Digite esse código naquela opção que você achou no celular.');
         } catch (error) {
             console.error('\nErro ao gerar o código:', error);
-            console.log('Se der erro, verifique se o número foi digitado corretamente na linha 8!');
+            console.log('Verifique se o número foi digitado corretamente na linha 8!');
         }
-    }, 5000); 
+    }, 15000); 
 });
 
 client.on('ready', () => {
@@ -46,14 +48,14 @@ client.on('ready', () => {
 
 client.on('message', message => {
     if(message.body.toLowerCase() === 'oi') {
-        message.reply('Olá! Estou rodando perfeitamente! Como posso ajudar?');
+        message.reply('Olá! Estou rodando perfeitamente de uma sessão novinha em folha! Como posso ajudar?');
     }
 });
 
 client.initialize();
 
 app.get('/', (req, res) => {
-  res.send('O robô está online!');
+  res.send('O robô está online e a sessão foi resetada!');
 });
 
 app.listen(port, () => {
