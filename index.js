@@ -4,19 +4,17 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const app = express();
 const port = process.env.PORT || 3000; 
 
-// O seu número já está configurado aqui!
+// O seu número está de volta aqui!
 const numeroDoRobo = '50932074530'; 
 
 const client = new Client({
-    authStrategy: new LocalAuth({ clientId: 'sessao-nova-2' }),
+    authStrategy: new LocalAuth({ clientId: 'sessao-com-numero' }),
     puppeteer: {
         args: [
             '--no-sandbox', 
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
             '--disable-accelerated-2d-canvas',
-            '--no-first-run',
-            '--no-zygote',
             '--disable-gpu'
         ]
     }
@@ -25,13 +23,16 @@ const client = new Client({
 client.on('qr', async (qr) => {
     console.log('\n--- WHATSAPP CARREGADO! ---');
     
-    // PLANO B: Já vamos imprimir o código de texto do QR Code por segurança!
-    console.log('\n👇 SE O CÓDIGO DE LETRAS/NÚMEROS DER ERRO, USE O PLANO B ABAIXO 👇');
-    console.log('Copie o texto a seguir (começa com 1@) e cole no site br.qr-code-generator.com (na aba Texto):');
+    // PLANO B IMPRESSO PRIMEIRO POR SEGURANÇA
+    console.log('\n=========================================================');
+    console.log('👇 SE O CÓDIGO DE NÚMEROS DER ERRO (t: t), USE O TEXTO ABAIXO 👇');
+    console.log('=========================================================\n');
     console.log(qr);
-    console.log('👆 -------------------------------------------------------- 👆\n');
+    console.log('\n=========================================================');
+    console.log('👆 COPIE O TEXTO ACIMA E COLE NO SITE br.qr-code-generator.com 👆');
+    console.log('=========================================================\n');
 
-    console.log('Tentando gerar o código de 8 dígitos... Aguarde 10 segundos...');
+    console.log(`Tentando gerar o código de 8 dígitos para o número ${numeroDoRobo}... Aguarde 12 segundos...`);
     
     setTimeout(async () => {
         try {
@@ -40,15 +41,14 @@ client.on('qr', async (qr) => {
             console.log(`🚀 SEU CÓDIGO DO WHATSAPP É: ${codigo}`);
             console.log('=============================================\n');
         } catch (error) {
-            console.error('\n❌ ERRO NO CÓDIGO DE LETRAS (O WhatsApp bloqueou o clique automático) ❌');
-            console.log('👉 MAS NÃO SE PREOCUPE! Use o "Plano B" que apareceu logo acima!');
-            console.log('Copie aquele texto longo, jogue no site br.qr-code-generator.com, e escaneie o QR Code que vai aparecer na tela do seu computador!');
+            console.error('\n❌ ERRO NO CÓDIGO DE LETRAS (O WhatsApp bloqueou a geração e deu o erro t:t) ❌');
+            console.log('👉 O erro não é sua culpa! Use o TEXTO que apareceu logo acima e cole no site br.qr-code-generator.com para gerar o QR Code!');
         }
-    }, 10000); 
+    }, 12000); 
 });
 
 client.on('ready', () => {
-    console.log('\n🎉 Seu assistente está conectado e pronto para uso!');
+    console.log('\n🎉 SUCESSO! Seu assistente está conectado e pronto para uso!');
 });
 
 client.on('message', message => {
@@ -60,7 +60,7 @@ client.on('message', message => {
 client.initialize();
 
 app.get('/', (req, res) => {
-  res.send('O robô está online e rodando!');
+  res.send('O robô está online!');
 });
 
 app.listen(port, () => {
